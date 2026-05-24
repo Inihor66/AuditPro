@@ -58,29 +58,76 @@ app.get("/api/health", (req, res) => {
 
 // Auth
 app.post("/api/auth/signup", (req, res) => {
-  const { email, password, name, role, appId, ...other } = req.body;
-  
-  const existing = db.users.find(u => 
-    u.email?.toLowerCase() === email?.toLowerCase() && 
-    (appId ? u.appId === appId : !u.appId)
-  );
-  if (existing) return res.status(400).json({ error: "Email already exists in this app" });
-  
-  const newUser = { id: Math.random().toString(36).substr(2, 9), email, password, name, role, appId, createdAt: new Date().toISOString(), ...other };
-  db.users.push(newUser);
-  saveDB();
-  res.json(newUser);
+  try {
+    const { email, password, name, role, appId, ...other } = req.body || {};
+    
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+    if (!password) {
+      return res.status(400).json({ error: "Password is required" });
+    }
+    if (!name) {
+      return res.status(400).json({ error: "Name is required" });
+    }
+
+    if (!db.users) {
+      db.users = [];
+    }
+    
+    const existing = db.users.find(u => 
+      u && typeof u === 'object' && u.email &&
+      u.email.toLowerCase() === email.toLowerCase() && 
+      (appId ? u.appId === appId : !u.appId)
+    );
+    if (existing) {
+      return res.status(400).json({ error: "Email already exists in this app" });
+    }
+    
+    const newUser = { 
+      id: Math.random().toString(36).substr(2, 9), 
+      email, 
+      password, 
+      name, 
+      role, 
+      appId: appId || undefined, 
+      createdAt: new Date().toISOString(), 
+      ...other 
+    };
+    db.users.push(newUser);
+    saveDB();
+    res.json(newUser);
+  } catch (err: any) {
+    console.error("Signup error:", err);
+    res.status(500).json({ error: err.message || "Internal server error during registration" });
+  }
 });
 
 app.post("/api/auth/login", (req, res) => {
-  const { email, password, appId } = req.body;
-  const user = db.users.find(u => 
-    u.email?.toLowerCase() === email?.toLowerCase() && 
-    u.password === password &&
-    (appId ? u.appId === appId : !u.appId)
-  );
-  if (!user) return res.status(401).json({ error: "Invalid credentials" });
-  res.json(user);
+  try {
+    const { email, password, appId } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    if (!db.users) {
+      db.users = [];
+    }
+
+    const user = db.users.find(u => 
+      u && typeof u === 'object' && u.email &&
+      u.email.toLowerCase() === email.toLowerCase() && 
+      u.password === password &&
+      (appId ? u.appId === appId : !u.appId)
+    );
+    if (!user) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    res.json(user);
+  } catch (err: any) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: err.message || "Internal server error during login" });
+  }
 });
 
 app.put("/api/auth/profile", (req, res) => {
