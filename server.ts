@@ -9,6 +9,15 @@ const DB_FILE = path.join(process.cwd(), "db.json");
 
 app.use(express.json());
 
+// Global Request Logger Middleware
+app.use((req, res, next) => {
+  console.log(`[LOGGER] ${req.method} ${req.path}`, {
+    query: req.query,
+    body: req.body ? { ...req.body, password: req.body.password ? "******" : undefined } : null
+  });
+  next();
+});
+
 // Simple persistence
 let db = {
   users: [],
@@ -753,6 +762,13 @@ app.get("/api/admin/:appId/users", (req, res) => {
     const users = db.users.filter(u => userIds.has(u.id));
     res.json(users);
 });
+
+// Global Error Handler Middleware
+app.use((err: any, req: any, res: any, next: any) => {
+    console.error("[GLOBAL ERROR INTERCEPTOR]:", err);
+    res.status(500).json({ error: err.message || "Internal Server Error" });
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
