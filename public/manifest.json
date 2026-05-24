@@ -1,0 +1,21 @@
+{
+  "short_name": "AuditApp",
+  "name": "Secure Digital Audit Network",
+  "icons": [
+    {
+      "src": "https://img.icons8.com/color/192/shield.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://img.icons8.com/color/512/shield.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#f59e0b",
+  "display": "standalone",
+  "orientation": "portrait"
+}

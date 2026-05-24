@@ -1,0 +1,6 @@
+{
+  "name": "AuditMaster Pro",
+  "description": "A multi-portal audit management system with Master, Owner, Firm, Admin, and Student interfaces.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
