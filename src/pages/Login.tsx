@@ -21,7 +21,16 @@ export function Login() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, appId })
       });
-      if (!res.ok) throw new Error('Authentication failed. Invalid credentials.');
+      if (!res.ok) {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          throw new Error(data.error || `Authentication failed. Invalid credentials.`);
+        } else {
+          const rawText = await res.text();
+          throw new Error(rawText.substring(0, 100) || `Server error during login (status: ${res.status})`);
+        }
+      }
       const user = await res.json();
       login(user);
       navigate('/');

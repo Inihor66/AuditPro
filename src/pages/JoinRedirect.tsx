@@ -196,8 +196,14 @@ export function JoinRedirect() {
                     })
                 });
                 if (!res.ok) {
-                    const data = await res.json();
-                    throw new Error(data.error || 'Signup failed');
+                    const contentType = res.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const data = await res.json();
+                        throw new Error(data.error || `Signup failed with status ${res.status}`);
+                    } else {
+                        const rawText = await res.text();
+                        throw new Error(rawText.substring(0, 100) || `Server error during signup (status: ${res.status})`);
+                    }
                 }
                 const user = await res.json();
                 login(user);
@@ -209,8 +215,14 @@ export function JoinRedirect() {
                     body: JSON.stringify({ email, password, appId })
                 });
                 if (!res.ok) {
-                    const data = await res.json();
-                    throw new Error(data?.error || 'Authentication failed. Please check credentials.');
+                    const contentType = res.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const data = await res.json();
+                        throw new Error(data?.error || `Login failed with status ${res.status}`);
+                    } else {
+                        const rawText = await res.text();
+                        throw new Error(rawText.substring(0, 100) || `Server error during login (status: ${res.status})`);
+                    }
                 }
                 const user = await res.json();
                 login(user);

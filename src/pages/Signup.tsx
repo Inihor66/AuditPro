@@ -31,8 +31,14 @@ export function Signup() {
         body: JSON.stringify({ email, password, name, phone, location, auditLocation, role: activeRole, appId })
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Signup sequence failed');
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          throw new Error(data.error || `Signup failed with status ${res.status}`);
+        } else {
+          const rawText = await res.text();
+          throw new Error(rawText.substring(0, 100) || `Server error during signup (status: ${res.status})`);
+        }
       }
       const user = await res.json();
       login(user);
