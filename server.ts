@@ -29,9 +29,12 @@ let db = {
 };
 
 function loadDB() {
-  if (fs.existsSync(DB_FILE)) {
+  const fileToLoad = (process.env.VERCEL && fs.existsSync(path.join("/tmp", "db.json")))
+    ? path.join("/tmp", "db.json")
+    : DB_FILE;
+  if (fs.existsSync(fileToLoad)) {
     try {
-      db = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
+      db = JSON.parse(fs.readFileSync(fileToLoad, "utf-8"));
     } catch (e) {
       console.error("Error loading DB", e);
     }
@@ -39,7 +42,19 @@ function loadDB() {
 }
 
 function saveDB() {
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+  } catch (err) {
+    console.error("Failed to write to DB file (expected in read-only and serverless environments):", err);
+    if (process.env.VERCEL) {
+      try {
+        const TMP_FILE = path.join("/tmp", "db.json");
+        fs.writeFileSync(TMP_FILE, JSON.stringify(db, null, 2));
+      } catch (tmpErr) {
+        console.error("Failed to write to /tmp DB file:", tmpErr);
+      }
+    }
+  }
 }
 
 function getActiveSubscriptions(userId: string) {
@@ -770,17 +785,27 @@ app.use((err: any, req: any, res: any, next: any) => {
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  const distPath = path.join(process.cwd(), "dist");
+  const hasIndexHtml = fs.existsSync(path.join(distPath, "index.html"));
+  const useVite = process.env.NODE_ENV !== "production" || !hasIndexHtml;
+
+  if (useVite) {
+    console.log("[SERVER] Starting in development mode using Vite middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    console.log("[SERVER] Starting in production mode serving static files from:", distPath);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(path.join(distPath, "index.html"), (err) => {
+        if (err) {
+          console.error("[SERVER] Error sending index.html:", err);
+          res.status(500).send("Static fallback error: Built index.html is missing. Please build the application first.");
+        }
+      });
     });
   }
 
@@ -789,4 +814,8 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
