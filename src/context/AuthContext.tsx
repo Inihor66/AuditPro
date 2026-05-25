@@ -17,7 +17,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const saved = localStorage.getItem('auth_user');
     if (saved) {
-      setUser(JSON.parse(saved));
+      try {
+        const u = JSON.parse(saved);
+        setUser(u);
+        // Sync user state with Vercel serverless in case of container reciclations/cold-starts
+        fetch('/api/auth/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: u })
+        }).catch(err => console.error('Failed to sync auth session on reload:', err));
+      } catch (err) {
+        console.error('Error loading session from localStorage:', err);
+      }
     }
     setIsLoading(false);
   }, []);

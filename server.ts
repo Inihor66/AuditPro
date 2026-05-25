@@ -28,14 +28,35 @@ let db = {
 };
 
 function loadDB() {
-  const fileToLoad = (process.env.VERCEL && fs.existsSync(path.join("/tmp", "db.json")))
-    ? path.join("/tmp", "db.json")
-    : DB_FILE;
+  let fileToLoad = DB_FILE;
+  if (fs.existsSync(path.join("/tmp", "db.json"))) {
+    fileToLoad = path.join("/tmp", "db.json");
+  }
+
+  // Always reset to valid default structure first
+  db = {
+    users: [],
+    apps: [],
+    forms: [],
+    subscriptions: [],
+    chats: [],
+    transactions: []
+  };
+
   if (fs.existsSync(fileToLoad)) {
     try {
-      db = JSON.parse(fs.readFileSync(fileToLoad, "utf-8"));
+      const content = fs.readFileSync(fileToLoad, "utf-8");
+      if (content && content.trim()) {
+        const parsed = JSON.parse(content) || {};
+        db.users = Array.isArray(parsed.users) ? parsed.users : [];
+        db.apps = Array.isArray(parsed.apps) ? parsed.apps : [];
+        db.forms = Array.isArray(parsed.forms) ? parsed.forms : [];
+        db.subscriptions = Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [];
+        db.chats = Array.isArray(parsed.chats) ? parsed.chats : [];
+        db.transactions = Array.isArray(parsed.transactions) ? parsed.transactions : [];
+      }
     } catch (e) {
-      console.error("Error loading DB", e);
+      console.error("Error loading DB from file:", e);
     }
   }
 }
@@ -44,14 +65,12 @@ function saveDB() {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
   } catch (err) {
-    console.error("Failed to write to DB file (expected in read-only and serverless environments):", err);
-    if (process.env.VERCEL) {
-      try {
-        const TMP_FILE = path.join("/tmp", "db.json");
-        fs.writeFileSync(TMP_FILE, JSON.stringify(db, null, 2));
-      } catch (tmpErr) {
-        console.error("Failed to write to /tmp DB file:", tmpErr);
-      }
+    console.error("Failed to write to primary DB file, trying fallback to /tmp/db.json...", err);
+    try {
+      const TMP_FILE = path.join("/tmp", "db.json");
+      fs.writeFileSync(TMP_FILE, JSON.stringify(db, null, 2));
+    } catch (tmpErr) {
+      console.error("Failed to write to /tmp DB file:", tmpErr);
     }
   }
 }
@@ -150,6 +169,26 @@ app.post("/api/auth/login", (req, res) => {
   } catch (err: any) {
     console.error("Login error:", err);
     res.status(500).json({ error: err.message || "Internal server error during login" });
+  }
+});
+
+app.post("/api/auth/sync", (req, res) => {
+  try {
+    const { user } = req.body || {};
+    if (!user || !user.id || !user.email) {
+      return res.status(400).json({ error: "Invalid user data" });
+    }
+    
+    const idx = db.users.findIndex(u => u.id === user.id);
+    if (idx === -1) {
+      console.log(`[SYNC] Restoring user ${user.email} (${user.id}) into stateless DB.`);
+      db.users.push(user);
+      saveDB();
+    }
+    res.json({ success: true, user });
+  } catch (err: any) {
+    console.error("Sync error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -786,7 +825,7 @@ app.use((err: any, req: any, res: any, next: any) => {
 async function startServer() {
   const distPath = path.join(process.cwd(), "dist");
   const hasIndexHtml = fs.existsSync(path.join(distPath, "index.html"));
-  const useVite = process.env.NODE_ENV !== "production" || !hasIndexHtml;
+  const useVite = !process.env.VERCEL && (process.env.NODE_ENV !== "production" || !hasIndexHtml);
 
   if (useVite) {
     console.log("[SERVER] Starting in development mode using Vite middleware...");
