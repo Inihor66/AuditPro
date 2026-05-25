@@ -1,6 +1,4 @@
-import appBundle from "../dist/server.cjs";
-
-const app = (appBundle as any).default || appBundle;
+import app from "../server.js";
 
 export const config = {
   api: {
@@ -9,3 +7,4 @@ export const config = {
 };
 
 export default app;
+
