@@ -15,7 +15,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const saved = localStorage.getItem('auth_user');
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem('auth_user');
+    } catch (e) {
+      console.warn('localStorage is blocked or unavailable in this environment:', e);
+    }
     if (saved) {
       try {
         const u = JSON.parse(saved);
@@ -35,12 +40,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = (u: User) => {
     setUser(u);
-    localStorage.setItem('auth_user', JSON.stringify(u));
+    try {
+      localStorage.setItem('auth_user', JSON.stringify(u));
+    } catch (e) {
+      console.warn('Failed to set localStorage:', e);
+    }
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('auth_user');
+    try {
+      localStorage.removeItem('auth_user');
+    } catch (e) {
+      console.warn('Failed to remove localStorage:', e);
+    }
   };
 
   return (
