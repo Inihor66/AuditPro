@@ -8,12 +8,23 @@ const DB_FILE = process.env.VERCEL
   ? path.join("/tmp", "db.json") 
   : path.join(process.cwd(), "db.json");
 
-app.use((req, res, next) => {
-  if (req.body !== undefined) {
-    return next();
-  }
-  express.json()(req, res, next);
-});
+if (!process.env.VERCEL) {
+  app.use(express.json());
+} else {
+  // On Vercel, the body is already parsed by @vercel/node. 
+  // However, sometimes it is. `req.body` can be a string or object.
+  // We can add a simple middleware to ensure req.body is parsed if it's a string.
+  app.use((req, res, next) => {
+    if (typeof req.body === "string" && req.body.trim()) {
+      try {
+        req.body = JSON.parse(req.body);
+      } catch (e) {
+        console.error("Failed to parse request body string on Vercel:", e);
+      }
+    }
+    next();
+  });
+}
 
 // Global Request Logger Middleware
 app.use((req, res, next) => {
@@ -56,7 +67,31 @@ function loadDB() {
 
   const fileToLoad = DB_FILE;
   db = {
-    users: [],
+    users: [
+      {
+        id: "du7f37zre",
+        email: "aasthapurwar8@gmail.com",
+        password: "a",
+        name: "AASTHA HEMANT PURWAR",
+        role: "master",
+        createdAt: "2026-05-29T11:09:39.531Z",
+        phone: "09422332475",
+        location: "a",
+        auditLocation: "",
+        appId: "jmsl9km57"
+      },
+      {
+        id: "uei1g0er4",
+        email: "aasthapurwar8@gmail.com",
+        password: "a",
+        name: "Aastha Purwar",
+        role: "master",
+        createdAt: "2026-05-31T07:59:13.157Z",
+        phone: "09422332475",
+        location: "a",
+        auditLocation: ""
+      }
+    ],
     apps: [],
     forms: [],
     subscriptions: [],
@@ -69,7 +104,7 @@ function loadDB() {
       const content = fs.readFileSync(fileToLoad, "utf-8");
       if (content && content.trim()) {
         const parsed = JSON.parse(content) || {};
-        db.users = Array.isArray(parsed.users) ? parsed.users : [];
+        db.users = Array.isArray(parsed.users) && parsed.users.length > 0 ? parsed.users : db.users;
         db.apps = Array.isArray(parsed.apps) ? parsed.apps : [];
         db.forms = Array.isArray(parsed.forms) ? parsed.forms : [];
         db.subscriptions = Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [];
