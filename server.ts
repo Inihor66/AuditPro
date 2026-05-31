@@ -4,7 +4,9 @@ import fs from "fs";
 
 const app = express();
 const PORT = 3000;
-const DB_FILE = path.join(process.cwd(), "db.json");
+const DB_FILE = process.env.VERCEL 
+  ? path.join("/tmp", "db.json") 
+  : path.join(process.cwd(), "db.json");
 
 app.use((req, res, next) => {
   if (req.body !== undefined) {
@@ -33,12 +35,26 @@ let db = {
 };
 
 function loadDB() {
-  let fileToLoad = DB_FILE;
-  if (fs.existsSync(path.join("/tmp", "db.json"))) {
-    fileToLoad = path.join("/tmp", "db.json");
+  // If running in a Vercel serverless environment, copy seed db.json to /tmp if not already there
+  if (process.env.VERCEL) {
+    const tmpPath = path.join("/tmp", "db.json");
+    if (!fs.existsSync(tmpPath)) {
+      try {
+        const bundledPath = path.join(process.cwd(), "db.json");
+        if (fs.existsSync(bundledPath)) {
+          const content = fs.readFileSync(bundledPath, "utf-8");
+          fs.writeFileSync(tmpPath, content);
+          console.log("[SERVER] Copied bundled db.json to /tmp/db.json successfully.");
+        } else {
+          console.log("[SERVER] Bundled db.json not found to initialize from.");
+        }
+      } catch (err) {
+        console.error("[SERVER] Failed to copy seed db.json to writable /tmp path:", err);
+      }
+    }
   }
 
-  // Always reset to valid default structure first
+  const fileToLoad = DB_FILE;
   db = {
     users: [],
     apps: [],
@@ -69,13 +85,17 @@ function loadDB() {
 function saveDB() {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+    console.log("[SERVER] Database updated successfully at:", DB_FILE);
   } catch (err) {
-    console.error("Failed to write to primary DB file, trying fallback to /tmp/db.json...", err);
+    console.error("Failed to write to DB file:", err);
+    // Ultimate fallback if even config is wrong
     try {
-      const TMP_FILE = path.join("/tmp", "db.json");
-      fs.writeFileSync(TMP_FILE, JSON.stringify(db, null, 2));
+      const fallbackFile = path.join("/tmp", "db.json");
+      if (DB_FILE !== fallbackFile) {
+        fs.writeFileSync(fallbackFile, JSON.stringify(db, null, 2));
+      }
     } catch (tmpErr) {
-      console.error("Failed to write to /tmp DB file:", tmpErr);
+      console.error("Failed backup file write:", tmpErr);
     }
   }
 }
