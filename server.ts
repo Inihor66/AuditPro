@@ -8,8 +8,31 @@ const DB_FILE = process.env.VERCEL
   ? path.join("/tmp", "db.json") 
   : path.join(process.cwd(), "db.json");
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use((req: any, res: any, next: any) => {
+  // If Vercel has already parsed the body, use it!
+  if (req.body !== undefined) {
+    if (typeof req.body === "string" && req.body.trim()) {
+      try {
+        req.body = JSON.parse(req.body);
+      } catch (e) {
+        console.error("[SERVER] Failed to parse req.body string on Vercel:", e);
+      }
+    }
+    return next();
+  }
+
+  // On Vercel, if req.body is undefined, the stream is already consumed, so do not call express.json() to avoid a hang
+  if (process.env.VERCEL) {
+    req.body = {};
+    return next();
+  }
+
+  // Not on Vercel: run body parsing middlewares sequentially
+  express.json()(req, res, (err) => {
+    if (err) return next(err);
+    express.urlencoded({ extended: true })(req, res, next);
+  });
+});
 
 // Global Request Logger Middleware
 app.use((req, res, next) => {
