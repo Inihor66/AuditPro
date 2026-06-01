@@ -8,23 +8,7 @@ const DB_FILE = process.env.VERCEL
   ? path.join("/tmp", "db.json") 
   : path.join(process.cwd(), "db.json");
 
-if (!process.env.VERCEL) {
-  app.use(express.json());
-} else {
-  // On Vercel, the body is already parsed by @vercel/node. 
-  // However, sometimes it is. `req.body` can be a string or object.
-  // We can add a simple middleware to ensure req.body is parsed if it's a string.
-  app.use((req, res, next) => {
-    if (typeof req.body === "string" && req.body.trim()) {
-      try {
-        req.body = JSON.parse(req.body);
-      } catch (e) {
-        console.error("Failed to parse request body string on Vercel:", e);
-      }
-    }
-    next();
-  });
-}
+app.use(express.json());
 
 // Global Request Logger Middleware
 app.use((req, res, next) => {
