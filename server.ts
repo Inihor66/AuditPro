@@ -9,25 +9,24 @@ const DB_FILE = process.env.VERCEL
   : path.join(process.cwd(), "db.json");
 
 app.use((req: any, res: any, next: any) => {
-  // If Vercel has already parsed the body, use it!
-  if (req.body !== undefined) {
+  // If the body is already parsed (e.g. by automatic Vercel parsing on some routes)
+  // or if the stream has already been fully consumed, do not run express.json() to prevent hanging.
+  if (req.body !== undefined || req.readableEnded) {
     if (typeof req.body === "string" && req.body.trim()) {
       try {
         req.body = JSON.parse(req.body);
       } catch (e) {
-        console.error("[SERVER] Failed to parse req.body string on Vercel:", e);
+        console.error("[SERVER] Failed to parse req.body string:", e);
       }
+    }
+    // If body is undefined but stream is ended/consumed, initialize it to an empty object
+    if (req.body === undefined) {
+      req.body = {};
     }
     return next();
   }
 
-  // On Vercel, if req.body is undefined, the stream is already consumed, so do not call express.json() to avoid a hang
-  if (process.env.VERCEL) {
-    req.body = {};
-    return next();
-  }
-
-  // Not on Vercel: run body parsing middlewares sequentially
+  // Otherwise, use sequential body-parsers safely
   express.json()(req, res, (err) => {
     if (err) return next(err);
     express.urlencoded({ extended: true })(req, res, next);
