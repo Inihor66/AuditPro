@@ -15,8 +15,25 @@ app.use((req: any, res: any, next: any) => {
     return next();
   }
 
-  // 2. If the body is already parsed (e.g. by automatic Vercel parsing on some routes)
-  // or if the stream has already been fully consumed, use it directly!
+  // 2. On Vercel, the platform has already parsed the body if present.
+  // We must never call express.json() / express.urlencoded() here because Vercel already consumed the request streams,
+  // which will cause Express to wait indefinitely (hang) for data streams that will never arrive.
+  if (process.env.VERCEL) {
+    if (req.body !== undefined) {
+      if (typeof req.body === "string" && req.body.trim()) {
+        try {
+          req.body = JSON.parse(req.body);
+        } catch (e) {
+          console.error("[SERVER] Failed to parse req.body string on Vercel:", e);
+        }
+      }
+    } else {
+      req.body = {};
+    }
+    return next();
+  }
+
+  // 3. Local / standalone environment: use Vercel-like parsed values to optimize or use safe Express fallback parsers
   if (req.body !== undefined || req.readableEnded) {
     if (typeof req.body === "string" && req.body.trim()) {
       try {
@@ -25,14 +42,13 @@ app.use((req: any, res: any, next: any) => {
         console.error("[SERVER] Failed to parse req.body string:", e);
       }
     }
-    // Safeguard to ensure body is at least an empty object for POST/PUT/PATCH
     if (req.body === undefined) {
       req.body = {};
     }
     return next();
   }
 
-  // 3. Otherwise (e.g. in local development), run sequential body-parsers safely
+  // 4. Otherwise, parse standard streams in development
   express.json()(req, res, (err) => {
     if (err) return next(err);
     express.urlencoded({ extended: true })(req, res, next);
