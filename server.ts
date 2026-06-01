@@ -15,43 +15,102 @@ app.use((req: any, res: any, next: any) => {
     return next();
   }
 
-  // 2. On Vercel, the platform has already parsed the body if present.
-  // We must never call express.json() / express.urlencoded() here because Vercel already consumed the request streams,
-  // which will cause Express to wait indefinitely (hang) for data streams that will never arrive.
-  if (process.env.VERCEL) {
-    if (req.body !== undefined) {
-      if (typeof req.body === "string" && req.body.trim()) {
-        try {
-          req.body = JSON.parse(req.body);
-        } catch (e) {
-          console.error("[SERVER] Failed to parse req.body string on Vercel:", e);
-        }
-      }
-    } else {
-      req.body = {};
-    }
-    return next();
-  }
-
-  // 3. Local / standalone environment: use Vercel-like parsed values to optimize or use safe Express fallback parsers
-  if (req.body !== undefined || req.readableEnded) {
+  // 2. If body is already parsed by upstream platform or serverless wrapper
+  if (req.body !== undefined && req.body !== null) {
     if (typeof req.body === "string" && req.body.trim()) {
       try {
         req.body = JSON.parse(req.body);
       } catch (e) {
-        console.error("[SERVER] Failed to parse req.body string:", e);
+        try {
+          const params = new URLSearchParams(req.body);
+          const obj: any = {};
+          params.forEach((val, key) => { obj[key] = val; });
+          req.body = obj;
+        } catch (_) {}
       }
-    }
-    if (req.body === undefined) {
-      req.body = {};
     }
     return next();
   }
 
-  // 4. Otherwise, parse standard streams in development
-  express.json()(req, res, (err) => {
-    if (err) return next(err);
-    express.urlencoded({ extended: true })(req, res, next);
+  // 3. Inspect if there's no payload (Content-Length = 0) or if stream is already consumed or ended
+  const contentLength = req.headers["content-length"];
+  if (contentLength === "0" || req.readableEnded || !req.readable) {
+    req.body = {};
+    return next();
+  }
+
+  // 4. Manually consume the request stream with a safety timeout to guarantee zero hanging
+  let data = "";
+  let isFinished = false;
+
+  const timeout = setTimeout(() => {
+    if (isFinished) return;
+    isFinished = true;
+    console.warn(`[SERVER BODY PARSER] Safety timeout reached for ${req.method} ${req.path}`);
+    req.body = {};
+    next();
+  }, 2000);
+
+  req.on("data", (chunk: any) => {
+    if (isFinished) return;
+    data += chunk;
+    // Cap payload size at 5MB
+    if (data.length > 5 * 1024 * 1024) {
+      isFinished = true;
+      clearTimeout(timeout);
+      res.status(413).json({ error: "Payload too large" });
+    }
+  });
+
+  req.on("end", () => {
+    if (isFinished) return;
+    isFinished = true;
+    clearTimeout(timeout);
+
+    if (!data.trim()) {
+      req.body = {};
+      return next();
+    }
+
+    const contentType = req.headers["content-type"] || "";
+    try {
+      if (contentType.includes("application/json")) {
+        req.body = JSON.parse(data);
+      } else if (contentType.includes("application/x-www-form-urlencoded")) {
+        const params = new URLSearchParams(data);
+        const obj: any = {};
+        params.forEach((val, key) => { obj[key] = val; });
+        req.body = obj;
+      } else {
+        // Fallback checks
+        try {
+          req.body = JSON.parse(data);
+        } catch (_) {
+          try {
+            const params = new URLSearchParams(data);
+            const obj: any = {};
+            let hasKeys = false;
+            params.forEach((val, key) => { obj[key] = val; hasKeys = true; });
+            req.body = hasKeys ? obj : { raw: data };
+          } catch (__) {
+            req.body = { raw: data };
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[SERVER BODY PARSER] Parsing error:", err);
+      req.body = {};
+    }
+    next();
+  });
+
+  req.on("error", (err: any) => {
+    if (isFinished) return;
+    isFinished = true;
+    clearTimeout(timeout);
+    console.error("[SERVER BODY PARSER] Stream error:", err);
+    req.body = {};
+    next(err);
   });
 });
 
@@ -75,26 +134,25 @@ let db = {
 };
 
 function loadDB() {
-  // If running in a Vercel serverless environment, copy seed db.json to /tmp if not already there
-  if (process.env.VERCEL) {
-    const tmpPath = path.join("/tmp", "db.json");
-    if (!fs.existsSync(tmpPath)) {
-      try {
-        const bundledPath = path.join(process.cwd(), "db.json");
-        if (fs.existsSync(bundledPath)) {
-          const content = fs.readFileSync(bundledPath, "utf-8");
-          fs.writeFileSync(tmpPath, content);
-          console.log("[SERVER] Copied bundled db.json to /tmp/db.json successfully.");
-        } else {
-          console.log("[SERVER] Bundled db.json not found to initialize from.");
-        }
-      } catch (err) {
-        console.error("[SERVER] Failed to copy seed db.json to writable /tmp path:", err);
+  const tmpPath = path.join("/tmp", "db.json");
+  const localPath = path.join(process.cwd(), "db.json");
+
+  // If running in a Vercel/serverless environment, copy seed db.json to /tmp if not already there
+  if (fs.existsSync("/tmp") && !fs.existsSync(tmpPath)) {
+    try {
+      if (fs.existsSync(localPath)) {
+        const content = fs.readFileSync(localPath, "utf-8");
+        fs.writeFileSync(tmpPath, content);
+        console.log("[SERVER] Seeded /tmp/db.json from local database.");
       }
+    } catch (err) {
+      console.error("[SERVER] Failed to seed /tmp/db.json:", err);
     }
   }
 
-  const fileToLoad = DB_FILE;
+  // Load from /tmp/db.json preferentially if it exists to preserve serverless updates, fallback to local file
+  const fileToLoad = (fs.existsSync("/tmp") && fs.existsSync(tmpPath)) ? tmpPath : localPath;
+
   db = {
     users: [
       {
@@ -128,6 +186,7 @@ function loadDB() {
     transactions: []
   };
 
+  console.log("[SERVER] Loading DB from file location:", fileToLoad);
   if (fs.existsSync(fileToLoad)) {
     try {
       const content = fs.readFileSync(fileToLoad, "utf-8");
@@ -147,19 +206,33 @@ function loadDB() {
 }
 
 function saveDB() {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-    console.log("[SERVER] Database updated successfully at:", DB_FILE);
-  } catch (err) {
-    console.error("Failed to write to DB file:", err);
-    // Ultimate fallback if even config is wrong
+  const tmpPath = path.join("/tmp", "db.json");
+  const localPath = path.join(process.cwd(), "db.json");
+  const payload = JSON.stringify(db, null, 2);
+
+  let isSaved = false;
+
+  // Always attempt to write to /tmp first if it exists
+  if (fs.existsSync("/tmp")) {
     try {
-      const fallbackFile = path.join("/tmp", "db.json");
-      if (DB_FILE !== fallbackFile) {
-        fs.writeFileSync(fallbackFile, JSON.stringify(db, null, 2));
-      }
-    } catch (tmpErr) {
-      console.error("Failed backup file write:", tmpErr);
+      fs.writeFileSync(tmpPath, payload);
+      console.log("[SERVER] Database updated successfully at /tmp/db.json");
+      isSaved = true;
+    } catch (err) {
+      console.error("Failed to write to /tmp/db.json:", err);
+    }
+  }
+
+  // Try writing to standard local folder to keep local workspace in sync
+  try {
+    fs.writeFileSync(localPath, payload);
+    console.log("[SERVER] Database updated successfully at local db.json");
+    isSaved = true;
+  } catch (err) {
+    if (!isSaved) {
+      console.error("CRITICAL: Failed to write database state anywhere!", err);
+    } else {
+      console.log("[SERVER] Workspace db.json is read-only (expected in cloud deployments). Saved state securely in /tmp.");
     }
   }
 }
