@@ -8,7 +8,12 @@ const DB_FILE = process.env.VERCEL
   ? path.join("/tmp", "db.json") 
   : path.join(process.cwd(), "db.json");
 
-app.use(express.json());
+app.use((req, res, next) => {
+  if (req.body !== undefined) {
+    return next();
+  }
+  express.json()(req, res, next);
+});
 
 // Global Request Logger Middleware
 app.use((req, res, next) => {

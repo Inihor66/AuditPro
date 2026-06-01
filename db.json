@@ -1,0 +1,32 @@
+{
+  "users": [
+    {
+      "id": "du7f37zre",
+      "email": "aasthapurwar8@gmail.com",
+      "password": "a",
+      "name": "AASTHA HEMANT PURWAR",
+      "role": "master",
+      "createdAt": "2026-05-29T11:09:39.531Z",
+      "phone": "09422332475",
+      "location": "a",
+      "auditLocation": "",
+      "appId": "jmsl9km57"
+    },
+    {
+      "id": "uei1g0er4",
+      "email": "aasthapurwar8@gmail.com",
+      "password": "a",
+      "name": "Aastha Purwar",
+      "role": "master",
+      "createdAt": "2026-05-31T07:59:13.157Z",
+      "phone": "09422332475",
+      "location": "a",
+      "auditLocation": ""
+    }
+  ],
+  "apps": [],
+  "forms": [],
+  "subscriptions": [],
+  "chats": [],
+  "transactions": []
+}
