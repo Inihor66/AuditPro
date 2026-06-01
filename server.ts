@@ -9,8 +9,14 @@ const DB_FILE = process.env.VERCEL
   : path.join(process.cwd(), "db.json");
 
 app.use((req: any, res: any, next: any) => {
-  // If the body is already parsed (e.g. by automatic Vercel parsing on some routes)
-  // or if the stream has already been fully consumed, do not run express.json() to prevent hanging.
+  // 1. Only run body parsing for POST, PUT, and PATCH requests
+  const hasBody = ["POST", "PUT", "PATCH"].includes(req.method);
+  if (!hasBody) {
+    return next();
+  }
+
+  // 2. If the body is already parsed (e.g. by automatic Vercel parsing on some routes)
+  // or if the stream has already been fully consumed, use it directly!
   if (req.body !== undefined || req.readableEnded) {
     if (typeof req.body === "string" && req.body.trim()) {
       try {
@@ -19,14 +25,14 @@ app.use((req: any, res: any, next: any) => {
         console.error("[SERVER] Failed to parse req.body string:", e);
       }
     }
-    // If body is undefined but stream is ended/consumed, initialize it to an empty object
+    // Safeguard to ensure body is at least an empty object for POST/PUT/PATCH
     if (req.body === undefined) {
       req.body = {};
     }
     return next();
   }
 
-  // Otherwise, use sequential body-parsers safely
+  // 3. Otherwise (e.g. in local development), run sequential body-parsers safely
   express.json()(req, res, (err) => {
     if (err) return next(err);
     express.urlencoded({ extended: true })(req, res, next);
