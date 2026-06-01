@@ -3,6 +3,17 @@ import path from "path";
 import fs from "fs";
 
 const app = express();
+
+// Normalize req.url on Vercel/serverless/reverse proxy environments if they rewrite to /api/index
+app.use((req: any, res: any, next: any) => {
+  const originalUrl = req.headers["x-forwarded-uri"] || req.headers["x-original-url"];
+  if (originalUrl) {
+    req.url = originalUrl;
+    req.originalUrl = originalUrl;
+  }
+  next();
+});
+
 const PORT = 3000;
 const DB_FILE = process.env.VERCEL 
   ? path.join("/tmp", "db.json") 
