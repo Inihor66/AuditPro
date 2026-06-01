@@ -6,10 +6,17 @@ const app = express();
 
 // Normalize req.url on Vercel/serverless/reverse proxy environments if they rewrite to /api/index
 app.use((req: any, res: any, next: any) => {
-  const originalUrl = req.headers["x-forwarded-uri"] || req.headers["x-original-url"];
-  if (originalUrl) {
-    req.url = originalUrl;
-    req.originalUrl = originalUrl;
+  // x-matched-path is the standard header Vercel sets containing the exact original path before rewrite
+  const matchedPath = req.headers["x-matched-path"] || req.headers["x-forwarded-uri"] || req.headers["x-original-url"];
+  if (matchedPath) {
+    try {
+      const urlObj = new URL(req.url, "http://localhost");
+      req.url = matchedPath + urlObj.search;
+      req.originalUrl = matchedPath + urlObj.search;
+    } catch (_) {
+      req.url = matchedPath;
+      req.originalUrl = matchedPath;
+    }
   }
   next();
 });
@@ -19,109 +26,39 @@ const DB_FILE = process.env.VERCEL
   ? path.join("/tmp", "db.json") 
   : path.join(process.cwd(), "db.json");
 
+// Body parser middleware that respects environments
 app.use((req: any, res: any, next: any) => {
-  // 1. Only run body parsing for POST, PUT, and PATCH requests
   const hasBody = ["POST", "PUT", "PATCH"].includes(req.method);
   if (!hasBody) {
     return next();
   }
 
-  // 2. If body is already parsed by upstream platform or serverless wrapper
-  if (req.body !== undefined && req.body !== null) {
-    if (typeof req.body === "string" && req.body.trim()) {
-      try {
-        req.body = JSON.parse(req.body);
-      } catch (e) {
+  // 1. On Vercel, the platform has already parsed the request stream.
+  // We must NEVER try to read the stream or call standard express body parser as it would hang indefinitely.
+  if (process.env.VERCEL) {
+    if (req.body !== undefined && req.body !== null) {
+      if (typeof req.body === "string" && req.body.trim()) {
         try {
-          const params = new URLSearchParams(req.body);
-          const obj: any = {};
-          params.forEach((val, key) => { obj[key] = val; });
-          req.body = obj;
-        } catch (_) {}
-      }
-    }
-    return next();
-  }
-
-  // 3. Inspect if there's no payload (Content-Length = 0) or if stream is already consumed or ended
-  const contentLength = req.headers["content-length"];
-  if (contentLength === "0" || req.readableEnded || !req.readable) {
-    req.body = {};
-    return next();
-  }
-
-  // 4. Manually consume the request stream with a safety timeout to guarantee zero hanging
-  let data = "";
-  let isFinished = false;
-
-  const timeout = setTimeout(() => {
-    if (isFinished) return;
-    isFinished = true;
-    console.warn(`[SERVER BODY PARSER] Safety timeout reached for ${req.method} ${req.path}`);
-    req.body = {};
-    next();
-  }, 2000);
-
-  req.on("data", (chunk: any) => {
-    if (isFinished) return;
-    data += chunk;
-    // Cap payload size at 5MB
-    if (data.length > 5 * 1024 * 1024) {
-      isFinished = true;
-      clearTimeout(timeout);
-      res.status(413).json({ error: "Payload too large" });
-    }
-  });
-
-  req.on("end", () => {
-    if (isFinished) return;
-    isFinished = true;
-    clearTimeout(timeout);
-
-    if (!data.trim()) {
-      req.body = {};
-      return next();
-    }
-
-    const contentType = req.headers["content-type"] || "";
-    try {
-      if (contentType.includes("application/json")) {
-        req.body = JSON.parse(data);
-      } else if (contentType.includes("application/x-www-form-urlencoded")) {
-        const params = new URLSearchParams(data);
-        const obj: any = {};
-        params.forEach((val, key) => { obj[key] = val; });
-        req.body = obj;
-      } else {
-        // Fallback checks
-        try {
-          req.body = JSON.parse(data);
-        } catch (_) {
+          req.body = JSON.parse(req.body);
+        } catch (e) {
           try {
-            const params = new URLSearchParams(data);
+            const params = new URLSearchParams(req.body);
             const obj: any = {};
-            let hasKeys = false;
-            params.forEach((val, key) => { obj[key] = val; hasKeys = true; });
-            req.body = hasKeys ? obj : { raw: data };
-          } catch (__) {
-            req.body = { raw: data };
-          }
+            params.forEach((val, key) => { obj[key] = val; });
+            req.body = obj;
+          } catch (_) {}
         }
       }
-    } catch (err) {
-      console.error("[SERVER BODY PARSER] Parsing error:", err);
+    } else {
       req.body = {};
     }
-    next();
-  });
+    return next();
+  }
 
-  req.on("error", (err: any) => {
-    if (isFinished) return;
-    isFinished = true;
-    clearTimeout(timeout);
-    console.error("[SERVER BODY PARSER] Stream error:", err);
-    req.body = {};
-    next(err);
+  // 2. Local/standalone environment: use standard Express body parsers
+  express.json()(req, res, (err) => {
+    if (err) return next(err);
+    express.urlencoded({ extended: true })(req, res, next);
   });
 });
 
