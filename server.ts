@@ -113,6 +113,61 @@ let db = {
   transactions: []
 };
 
+function ensureDefaultAppAndUser() {
+  if (!db.apps) db.apps = [];
+  if (!db.users) db.users = [];
+
+  // 1. Ensure master users exist
+  const defaultMaster1 = {
+    id: "du7f37zre",
+    email: "aasthapurwar8@gmail.com",
+    password: "a",
+    name: "AASTHA HEMANT PURWAR",
+    role: "master" as any,
+    createdAt: "2026-05-29T11:09:39.531Z",
+    phone: "09422332475",
+    location: "a",
+    auditLocation: "",
+    appId: "jmsl9km57"
+  };
+
+  const defaultMaster2 = {
+    id: "uei1g0er4",
+    email: "aasthapurwar8@gmail.com",
+    password: "a",
+    name: "Aastha Purwar",
+    role: "master" as any,
+    createdAt: "2026-05-31T07:59:13.157Z",
+    phone: "09422332475",
+    location: "a",
+    auditLocation: ""
+  };
+
+  const m1Idx = db.users.findIndex(u => u.id === defaultMaster1.id);
+  if (m1Idx === -1) {
+    db.users.push(defaultMaster1);
+  }
+  const m2Idx = db.users.findIndex(u => u.id === defaultMaster2.id);
+  if (m2Idx === -1) {
+    db.users.push(defaultMaster2);
+  }
+
+  // 2. Ensure default app "jmsl9km57" exists
+  const hasApp = db.apps.some(a => a.id === "jmsl9km57");
+  if (!hasApp) {
+    console.log("[SEED] Seeding default app jmsl9km57");
+    db.apps.push({
+      id: "jmsl9km57",
+      name: "AuditMaster Alpha",
+      ownerId: "du7f37zre",
+      link: `/join/jmsl9km57`,
+      createdAt: new Date().toISOString(),
+      isDeleted: false,
+      onPlayStore: false
+    });
+  }
+}
+
 async function loadDBFromFirestore() {
   if (!firebaseDb) return;
   try {
@@ -134,6 +189,9 @@ async function loadDBFromFirestore() {
       }
     }
     
+    // Ensure default app and user are seeded
+    ensureDefaultAppAndUser();
+
     lastLoadTimestamp = Date.now();
     console.log("[FIREBASE] Successfully synched all table lines from Cloud Firestore.");
   } catch (err) {
@@ -236,6 +294,9 @@ function loadDB() {
     }
   }
 
+  // Ensure default app and user are seeded
+  ensureDefaultAppAndUser();
+
   // Also lazily start Firestore pull in background
   if (firebaseDb) {
     loadDBFromFirestore().catch(err => {
@@ -287,7 +348,7 @@ async function saveDB() {
 }
 
 
-function getActiveSubscriptions(userId: string) {
+async function getActiveSubscriptions(userId: string) {
   const now = new Date();
   let changed = false;
   
@@ -299,7 +360,7 @@ function getActiveSubscriptions(userId: string) {
     return sub;
   });
 
-  if (changed) saveDB();
+  if (changed) await saveDB();
   return db.subscriptions.filter(s => s.userId === userId && s.isActive);
 }
 
@@ -311,7 +372,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // Auth
-app.post("/api/auth/signup", (req, res) => {
+app.post("/api/auth/signup", async (req, res) => {
   try {
     const { email, password, name, role, appId, ...other } = req.body || {};
     
@@ -349,7 +410,7 @@ app.post("/api/auth/signup", (req, res) => {
       ...other 
     };
     db.users.push(newUser);
-    saveDB();
+    await saveDB();
     res.json(newUser);
   } catch (err: any) {
     console.error("Signup error:", err);
@@ -384,7 +445,7 @@ app.post("/api/auth/login", (req, res) => {
   }
 });
 
-app.post("/api/auth/sync", (req, res) => {
+app.post("/api/auth/sync", async (req, res) => {
   try {
     const { 
       user, 
@@ -455,7 +516,7 @@ app.post("/api/auth/sync", (req, res) => {
 
     if (modified) {
       console.log(`[SYNC] Stateless db successfully restored with client-side backups for user: ${user.email}`);
-      saveDB();
+      await saveDB();
     }
     
     res.json({ success: true, user });
@@ -465,13 +526,13 @@ app.post("/api/auth/sync", (req, res) => {
   }
 });
 
-app.put("/api/auth/profile", (req, res) => {
+app.put("/api/auth/profile", async (req, res) => {
   const { id, name, location, phone } = req.body;
   const idx = db.users.findIndex(u => u.id === id);
   if (idx === -1) return res.status(404).json({ error: "User not found" });
   
   db.users[idx] = { ...db.users[idx], name, location, phone };
-  saveDB();
+  await saveDB();
   res.json(db.users[idx]);
 });
 
@@ -508,19 +569,19 @@ function enrichApp(app: any) {
   };
 }
 
-app.get("/api/apps", (req, res) => {
+app.get("/api/apps", async (req, res) => {
   const { ownerId } = req.query;
   // Trigger expiry check
-  getActiveSubscriptions(ownerId as string);
+  await getActiveSubscriptions(ownerId as string);
   const apps = db.apps.filter(a => a.ownerId === ownerId && !a.isDeleted);
   res.json(apps.map(enrichApp));
 });
 
-app.post("/api/apps", (req, res) => {
+app.post("/api/apps", async (req, res) => {
   const { name, ownerId } = req.body;
   const ownerApps = db.apps.filter(a => a.ownerId === ownerId);
   if (ownerApps.length >= 2) {
-    const activeSubs = getActiveSubscriptions(ownerId);
+    const activeSubs = await getActiveSubscriptions(ownerId);
     const sub = activeSubs.find(s => s.type === 'master_new_app');
     if (!sub) return res.status(403).json({ error: "App limit reached. Please subscribe." });
   }
@@ -536,7 +597,7 @@ app.post("/api/apps", (req, res) => {
     onPlayStore: false
   };
   db.apps.push(newApp);
-  saveDB();
+  await saveDB();
   res.json(enrichApp(newApp));
 });
 
@@ -564,11 +625,11 @@ app.get("/api/forms", (req, res) => {
   res.json(filtered);
 });
 
-app.post("/api/forms", (req, res) => {
+app.post("/api/forms", async (req, res) => {
   const { firmId } = req.body;
   if (firmId) {
     const firmFormsCount = db.forms.filter(f => f.firmId === firmId && f.status !== 'deleted').length;
-    const activeSubs = getActiveSubscriptions(firmId);
+    const activeSubs = await getActiveSubscriptions(firmId);
     const hasUnlimited = activeSubs.some(s => ['unlimited_entries_1m', 'unlimited_entries_6m', 'unlimited_entries_12m'].includes(s.type));
     
     if (!hasUnlimited && firmFormsCount >= 600) {
@@ -583,7 +644,7 @@ app.post("/api/forms", (req, res) => {
     createdAt: new Date().toISOString()
   };
   db.forms.push(form);
-  saveDB();
+  await saveDB();
   res.json(form);
 });
 
@@ -605,20 +666,20 @@ app.put("/api/forms/:id", async (req, res) => {
   res.json(db.forms[idx]);
 });
 
-app.delete("/api/forms/:id", (req, res) => {
+app.delete("/api/forms/:id", async (req, res) => {
   const idx = db.forms.findIndex(f => f.id === req.params.id);
   if (idx === -1) return res.status(404).send("Not found");
   
   // Firms/Students can only delete, editing is locked post-approval
   db.forms[idx].status = 'deleted';
-  saveDB();
+  await saveDB();
   res.json({ success: true });
 });
 
-app.get("/api/firm/:id/status", (req, res) => {
+app.get("/api/firm/:id/status", async (req, res) => {
   const firmId = req.params.id;
   const firmFormsCount = db.forms.filter(f => f.firmId === firmId && f.status !== 'deleted').length;
-  const activeSubs = getActiveSubscriptions(firmId);
+  const activeSubs = await getActiveSubscriptions(firmId);
   const unlimitedSub = activeSubs.find(s => ['unlimited_entries_1m', 'unlimited_entries_6m', 'unlimited_entries_12m'].includes(s.type));
   
   res.json({
@@ -629,13 +690,13 @@ app.get("/api/firm/:id/status", (req, res) => {
 });
 
 // Subscriptions
-app.get("/api/subscriptions/status", (req, res) => {
+app.get("/api/subscriptions/status", async (req, res) => {
   const { userId } = req.query;
-  const activeSubs = getActiveSubscriptions(userId as string);
+  const activeSubs = await getActiveSubscriptions(userId as string);
   res.json(activeSubs);
 });
 
-app.post("/api/payments/create", (req, res) => {
+app.post("/api/payments/create", async (req, res) => {
   const { userId, type, amountUSD, appId, playStoreAppLink } = req.body;
   const exchangeRate = 83; // 1 USD = 83 INR (approx)
   const amountINR = Math.round(amountUSD * exchangeRate);
@@ -660,12 +721,12 @@ app.post("/api/payments/create", (req, res) => {
   };
   
   db.transactions.push(newTransaction);
-  saveDB();
+  await saveDB();
   
   res.json({ transaction: newTransaction, upiLink });
 });
 
-app.post("/api/payments/verify", (req, res) => {
+app.post("/api/payments/verify", async (req, res) => {
   const { transactionId, utr } = req.body;
   const idx = db.transactions.findIndex(t => t.id === transactionId);
   
@@ -675,7 +736,7 @@ app.post("/api/payments/verify", (req, res) => {
   // Mark as pending manual verification
   db.transactions[idx].status = 'pending_verification';
   db.transactions[idx].utr = utr;
-  saveDB();
+  await saveDB();
   
   res.json({ success: true, message: "Transaction submitted for deep verification. Our finance team will review it within 15-30 minutes." });
 });
@@ -686,7 +747,7 @@ app.get("/api/master/transactions", (req, res) => {
 });
 
 // Master endpoint to approve a transaction
-app.post("/api/master/transactions/:id/approve", (req, res) => {
+app.post("/api/master/transactions/:id/approve", async (req, res) => {
     const transactionId = req.params.id;
     const idx = db.transactions.findIndex(t => t.id === transactionId);
     if (idx === -1) return res.status(404).json({ error: "Transaction not found" });
@@ -711,19 +772,19 @@ app.post("/api/master/transactions/:id/approve", (req, res) => {
     };
 
     db.subscriptions.push(newSub);
-    saveDB();
+    await saveDB();
     res.json({ success: true, subscription: newSub });
 });
 
-app.post("/api/master/transactions/:id/reject", (req, res) => {
+app.post("/api/master/transactions/:id/reject", async (req, res) => {
     const transactionId = req.params.id;
     const idx = db.transactions.findIndex(t => t.id === transactionId);
     if (idx === -1) return res.status(404).json({ error: "Transaction not found" });
     db.transactions[idx].status = 'rejected';
-    saveDB();
+    await saveDB();
     res.json({ success: true });
 });
-app.post("/api/admin/payments/approve", (req, res) => {
+app.post("/api/admin/payments/approve", async (req, res) => {
   const { transactionId } = req.body;
   const idx = db.transactions.findIndex(t => t.id === transactionId);
   
@@ -756,7 +817,7 @@ app.post("/api/admin/payments/approve", (req, res) => {
     }
   }
   
-  saveDB();
+  await saveDB();
   
   res.json({ success: true });
 });
@@ -767,15 +828,15 @@ app.get("/api/admin/payments/pending", (req, res) => {
 });
 
 // Owner Management Endpoints
-app.get("/api/owner/users", (req, res) => {
-  const usersWithSubs = db.users.map(u => {
-    const activeSubs = getActiveSubscriptions(u.id);
+app.get("/api/owner/users", async (req, res) => {
+  const usersWithSubs = await Promise.all(db.users.map(async (u) => {
+    const activeSubs = await getActiveSubscriptions(u.id);
     return { ...u, subscriptions: activeSubs };
-  });
+  }));
   res.json(usersWithSubs);
 });
 
-app.post("/api/owner/subscriptions/modify", (req, res) => {
+app.post("/api/owner/subscriptions/modify", async (req, res) => {
   const { userId, action, planType, appId } = req.body;
   if (action === 'unsubscribe') {
     db.subscriptions = db.subscriptions.map(s => 
@@ -801,7 +862,7 @@ app.post("/api/owner/subscriptions/modify", (req, res) => {
       isActive: true
     });
   }
-  saveDB();
+  await saveDB();
   res.json({ success: true });
 });
 
@@ -855,7 +916,7 @@ app.get("/api/admin/details", (req, res) => {
 });
 
 // Helper to get or dynamically create the system owner account
-function getOrCreateSystemOwner() {
+async function getOrCreateSystemOwner() {
     let owner = db.users.find(u => u.role === 'owner' || u.role === 'master');
     if (!owner) {
         const firstApp = db.apps[0];
@@ -869,14 +930,14 @@ function getOrCreateSystemOwner() {
             createdAt: new Date().toISOString()
         };
         db.users.push(owner);
-        saveDB();
+        await saveDB();
     }
     return owner;
 }
 
 // Get global system owner details
-app.get("/api/admin/owner-details", (req, res) => {
-    const owner = getOrCreateSystemOwner();
+app.get("/api/admin/owner-details", async (req, res) => {
+    const owner = await getOrCreateSystemOwner();
     res.json({ id: "system_owner", name: owner.name, email: owner.email });
 });
 
@@ -923,12 +984,12 @@ app.get("/api/owner/chats/summary", (req, res) => {
 });
 
 // Helper to get system owner (Master) details for an admin to chat with
-app.get("/api/admin/:appId/owner", (req, res) => {
-    const systemOwner = getOrCreateSystemOwner();
+app.get("/api/admin/:appId/owner", async (req, res) => {
+    const systemOwner = await getOrCreateSystemOwner();
     res.json({ id: "system_owner", name: systemOwner.name, email: systemOwner.email, phone: systemOwner.phone });
 });
 
-app.post("/api/chats", (req, res) => {
+app.post("/api/chats", async (req, res) => {
   const { senderId, receiverId, text } = req.body;
   const newMsg = {
     id: Math.random().toString(36).substr(2, 9),
@@ -938,7 +999,7 @@ app.post("/api/chats", (req, res) => {
     timestamp: new Date().toISOString()
   };
   db.chats.push(newMsg);
-  saveDB();
+  await saveDB();
   res.json(newMsg);
 });
 
@@ -999,19 +1060,19 @@ app.get("/api/owner/apps", (req, res) => {
     res.json(db.apps.filter(a => !a.isDeleted));
 });
 
-app.put("/api/apps/:id/approval", (req, res) => {
+app.put("/api/apps/:id/approval", async (req, res) => {
     const idx = db.apps.findIndex(a => a.id === req.params.id);
     if (idx === -1) return res.status(404).send("Not found");
     db.apps[idx].onPlayStore = req.body.onPlayStore;
-    saveDB();
+    await saveDB();
     res.json(db.apps[idx]);
 });
 
-app.put("/api/apps/:id/play-store-link", (req, res) => {
+app.put("/api/apps/:id/play-store-link", async (req, res) => {
     const idx = db.apps.findIndex(a => a.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: "App not found" });
     db.apps[idx].playStoreAppLink = req.body.playStoreAppLink;
-    saveDB();
+    await saveDB();
     res.json(db.apps[idx]);
 });
 
@@ -1068,11 +1129,11 @@ app.post("/api/admin/forms/:id/process", async (req, res) => {
     res.json(form);
 });
 
-app.delete("/api/admin/forms/:id", (req, res) => {
+app.delete("/api/admin/forms/:id", async (req, res) => {
     const idx = db.forms.findIndex(f => f.id === req.params.id);
     if (idx !== -1) {
         db.forms[idx].status = 'deleted';
-        saveDB();
+        await saveDB();
     }
     res.json({ success: true });
 });
