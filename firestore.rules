@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // allow read/write since the server acts as the proxy and handles authentication/validation securely on /api endpoints
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

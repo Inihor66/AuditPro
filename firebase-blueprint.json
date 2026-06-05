@@ -1,0 +1,128 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "App user representation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "password": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["master", "owner", "admin", "firm", "student"] },
+        "createdAt": { "type": "string" },
+        "phone": { "type": "string" },
+        "location": { "type": "string" },
+        "auditLocation": { "type": "string" },
+        "appId": { "type": "string" }
+      },
+      "required": ["id", "email", "role"]
+    },
+    "App": {
+      "title": "App",
+      "description": "Created white-labeled application",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "themeColor": { "type": "string" },
+        "subdomain": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "playStoreLink": { "type": "string" }
+      },
+      "required": ["id", "ownerId", "name"]
+    },
+    "Form": {
+      "title": "Form",
+      "description": "Forms, applications, or audits within an app",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "appId": { "type": "string" },
+        "title": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentEmail": { "type": "string" },
+        "studentName": { "type": "string" },
+        "firmId": { "type": "string" },
+        "status": { "type": "string" },
+        "submittedAt": { "type": "string" },
+        "data": { "type": "object" },
+        "chats": { "type": "array" }
+      },
+      "required": ["id", "appId", "title"]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "Premium tier subscriptions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "plan": { "type": "string" },
+        "status": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" }
+      },
+      "required": ["id", "userId", "plan"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Direct message chat thread",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "appId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "senderId", "receiverId"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Payment transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "currency": { "type": "string" },
+        "status": { "type": "string" },
+        "type": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "amount"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "App users and credentials"
+    },
+    "/apps/{appId}": {
+      "schema": "App",
+      "description": "Registered white-labeled applications"
+    },
+    "/forms/{formId}": {
+      "schema": "Form",
+      "description": "Form audits and applications"
+    },
+    "/subscriptions/{subId}": {
+      "schema": "Subscription",
+      "description": "Billing subscriptions"
+    },
+    "/chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Internal communication chats"
+    },
+    "/transactions/{txId}": {
+      "schema": "Transaction",
+      "description": "Payments history logs"
+    }
+  }
+}

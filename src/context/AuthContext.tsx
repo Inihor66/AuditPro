@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
+import { getSyncPayload } from '../lib/syncInterceptor';
 
 interface AuthContextType {
   user: User | null;
@@ -26,10 +27,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const u = JSON.parse(saved);
         setUser(u);
         // Sync user state with Vercel serverless in case of container reciclations/cold-starts
+        // We now aggregate and send all client-side backups of created data (apps, forms, chats, transactions)
+        const syncPayload = getSyncPayload(u);
         fetch('/api/auth/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user: u })
+          body: JSON.stringify(syncPayload)
         }).catch(err => console.error('Failed to sync auth session on reload:', err));
       } catch (err) {
         console.error('Error loading session from localStorage:', err);

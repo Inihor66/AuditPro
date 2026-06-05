@@ -1,6 +1,25 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, setDoc, getDocs, collection } from "firebase/firestore";
+
+let firebaseDb: any = null;
+let lastLoadTimestamp = 0;
+
+try {
+  const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(firebaseConfigPath)) {
+    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf8"));
+    const fbApp = initializeApp(firebaseConfig);
+    firebaseDb = getFirestore(fbApp, firebaseConfig.firestoreDatabaseId);
+    console.log("[FIREBASE] Cloud Firestore client initialized successfully inside server.ts");
+  } else {
+    console.error("[FIREBASE] firebase-applet-config.json not found!");
+  }
+} catch (err) {
+  console.error("[FIREBASE] Error during client initialization:", err);
+}
 
 const app = express();
 
@@ -71,6 +90,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// Auto-Sync with Firestore on incoming API requests (refreshes if >3 seconds elapsed since last load)
+app.use("/api", async (req: any, res: any, next: any) => {
+  if (firebaseDb && Date.now() - lastLoadTimestamp > 3000) {
+    try {
+      await loadDBFromFirestore();
+    } catch (err) {
+      console.error("[FIREBASE API CONGESTION SYNC ERROR]:", err);
+    }
+  }
+  next();
+});
+
+
 // Simple persistence
 let db = {
   users: [],
@@ -80,6 +112,58 @@ let db = {
   chats: [],
   transactions: []
 };
+
+async function loadDBFromFirestore() {
+  if (!firebaseDb) return;
+  try {
+    console.log("[FIREBASE] Syncing database FROM Cloud Firestore...");
+    const collections = ["users", "apps", "forms", "subscriptions", "chats", "transactions"];
+    
+    for (const colName of collections) {
+      const colRef = collection(firebaseDb, colName);
+      const snapshot = await getDocs(colRef);
+      const items: any[] = [];
+      snapshot.forEach(docSnap => {
+        if (docSnap.exists()) {
+          items.push(docSnap.data());
+        }
+      });
+      // Fallback only if Firestore has data, otherwise keep existing memory state
+      if (items.length > 0) {
+        (db as any)[colName] = items;
+      }
+    }
+    
+    lastLoadTimestamp = Date.now();
+    console.log("[FIREBASE] Successfully synched all table lines from Cloud Firestore.");
+  } catch (err) {
+    console.error("[FIREBASE] Synchronization from Firestore failed:", err);
+  }
+}
+
+async function saveDBToFirestore() {
+  if (!firebaseDb) return;
+  try {
+    console.log("[FIREBASE] Syncing database TO Cloud Firestore...");
+    const collections = ["users", "apps", "forms", "subscriptions", "chats", "transactions"];
+    const promises: Promise<any>[] = [];
+    
+    for (const colName of collections) {
+      const items = (db as any)[colName] || [];
+      for (const item of items) {
+        if (item && item.id) {
+          const docRef = doc(firebaseDb, colName, String(item.id));
+          promises.push(setDoc(docRef, item));
+        }
+      }
+    }
+    
+    await Promise.all(promises);
+    console.log("[FIREBASE] Successfully persisted all tables into Cloud Firestore.");
+  } catch (err) {
+    console.error("[FIREBASE] Error saving database state to Firestore:", err);
+  }
+}
 
 function loadDB() {
   const tmpPath = path.join("/tmp", "db.json");
@@ -151,6 +235,13 @@ function loadDB() {
       console.error("Error loading DB from file:", e);
     }
   }
+
+  // Also lazily start Firestore pull in background
+  if (firebaseDb) {
+    loadDBFromFirestore().catch(err => {
+      console.error("[FIREBASE INITIAL SYNC ON STARTUP FAILED]:", err);
+    });
+  }
 }
 
 function saveDB() {
@@ -183,7 +274,15 @@ function saveDB() {
       console.log("[SERVER] Workspace db.json is read-only (expected in cloud deployments). Saved state securely in /tmp.");
     }
   }
+
+  // 100% Cloud Persistence with Google Firebase Firestore
+  if (firebaseDb) {
+    saveDBToFirestore().catch(err => {
+      console.error("[FIREBASE SAVE ACTION FAILED]:", err);
+    });
+  }
 }
+
 
 function getActiveSubscriptions(userId: string) {
   const now = new Date();
@@ -284,17 +383,78 @@ app.post("/api/auth/login", (req, res) => {
 
 app.post("/api/auth/sync", (req, res) => {
   try {
-    const { user } = req.body || {};
+    const { 
+      user, 
+      backupUsers, 
+      backupApps, 
+      backupForms, 
+      backupSubscriptions, 
+      backupChats, 
+      backupTransactions 
+    } = req.body || {};
+    
     if (!user || !user.id || !user.email) {
       return res.status(400).json({ error: "Invalid user data" });
     }
-    
+
+    let modified = false;
+
+    // Standard deep merging helper that inserts any elements missing in server's local database
+    const mergeCollection = (dbList: any[], backupList: any[]) => {
+      if (!Array.isArray(backupList)) return;
+      backupList.forEach(item => {
+        if (item && item.id) {
+          const exists = dbList.some(x => x.id === item.id);
+          if (!exists) {
+            dbList.push(item);
+            modified = true;
+          }
+        }
+      });
+    };
+
+    // 1. Sync User info
+    if (!db.users) db.users = [];
     const idx = db.users.findIndex(u => u.id === user.id);
     if (idx === -1) {
-      console.log(`[SYNC] Restoring user ${user.email} (${user.id}) into stateless DB.`);
       db.users.push(user);
+      modified = true;
+    }
+    
+    // Sync other users (such as sub-accounts, student profiles, firm admin registrations)
+    if (Array.isArray(backupUsers)) {
+      backupUsers.forEach(u => {
+        if (u && u.id) {
+          const exists = db.users.some(x => x.id === u.id);
+          if (!exists) {
+            db.users.push(u);
+            modified = true;
+          }
+        }
+      });
+    }
+
+    // 2. Sync independent modules
+    if (!db.apps) db.apps = [];
+    mergeCollection(db.apps, backupApps);
+
+    if (!db.forms) db.forms = [];
+    mergeCollection(db.forms, backupForms);
+
+    if (!db.subscriptions) db.subscriptions = [];
+    mergeCollection(db.subscriptions, backupSubscriptions);
+
+    if (!db.chats) db.chats = [];
+    mergeCollection(db.chats, backupChats);
+
+    if (!db.transactions) db.transactions = [];
+    mergeCollection(db.transactions, backupTransactions);
+
+    if (modified) {
+      console.log(`[SYNC] Stateless db successfully restored with client-side backups for user: ${user.email}`);
       saveDB();
     }
+    
     res.json({ success: true, user });
   } catch (err: any) {
     console.error("Sync error:", err);
