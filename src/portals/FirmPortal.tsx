@@ -211,7 +211,7 @@ function PendingApproval() {
     const fetchForms = () => {
         if (!user?.id) return;
         fetch(`/api/forms?firmId=${user.id}`).then(r => r.json()).then(data => {
-            setForms(data.filter((f: any) => f.status === 'pending' || f.status === 'rejected' || f.status === 'approved_by_admin'));
+            setForms(data.filter((f: any) => f.status === 'pending' || f.status === 'rejected'));
         });
     };
 
