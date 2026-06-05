@@ -199,6 +199,24 @@ async function loadDBFromFirestore() {
   }
 }
 
+function sanitizeForFirestore(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeForFirestore);
+  }
+  if (typeof obj === 'object') {
+    const clean: any = {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        clean[key] = sanitizeForFirestore(val);
+      }
+    }
+    return clean;
+  }
+  return obj;
+}
+
 async function saveDBToFirestore() {
   if (!firebaseDb) return;
   try {
@@ -211,7 +229,8 @@ async function saveDBToFirestore() {
       for (const item of items) {
         if (item && item.id) {
           const docRef = doc(firebaseDb, colName, String(item.id));
-          promises.push(setDoc(docRef, item));
+          const cleanItem = sanitizeForFirestore(item);
+          promises.push(setDoc(docRef, cleanItem));
         }
       }
     }
@@ -1119,10 +1138,10 @@ app.post("/api/admin/forms/:id/process", async (req, res) => {
         return res.status(403).json({ error: "LIMIT_EXCEEDED", message: "You have reached your 800-form limit. Please subscribe to continue." });
     }
 
-    form.adminPayment = adminPayment;
-    form.adminTerms = adminTerms;
-    form.hiddenFields = hiddenFields;
-    form.customFields = customFields;
+    form.adminPayment = adminPayment !== undefined ? adminPayment : (form.adminPayment || 0);
+    form.adminTerms = adminTerms !== undefined ? adminTerms : (form.adminTerms || "");
+    form.hiddenFields = hiddenFields !== undefined ? hiddenFields : (form.hiddenFields || []);
+    form.customFields = customFields !== undefined ? customFields : (form.customFields || []);
     form.status = 'approved_by_admin';
     
     await saveDB();
