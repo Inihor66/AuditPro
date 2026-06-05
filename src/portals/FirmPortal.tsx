@@ -22,7 +22,8 @@ import {
   ShieldAlert,
   Smartphone,
   Mail,
-  MapPin
+  MapPin,
+  Lock
 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -210,7 +211,7 @@ function PendingApproval() {
     const fetchForms = () => {
         if (!user?.id) return;
         fetch(`/api/forms?firmId=${user.id}`).then(r => r.json()).then(data => {
-            setForms(data.filter((f: any) => f.status === 'pending' || f.status === 'rejected'));
+            setForms(data.filter((f: any) => f.status === 'pending' || f.status === 'rejected' || f.status === 'approved_by_admin'));
         });
     };
 
@@ -238,48 +239,78 @@ function PendingApproval() {
                         <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">No pending frames detected</p>
                     </div>
                 ) : (
-                    forms.map(f => (
-                        <div 
-                            key={f.id} 
-                            onClick={() => setSelected(f)}
-                            className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:scale-[1.01] transition-all cursor-pointer flex justify-between items-center group"
-                        >
-                            <div className="flex items-center gap-6">
-                                <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 group-hover:bg-amber-500 group-hover:text-white transition-colors">
-                                    <Clock className="w-6 h-6" />
+                    forms.map(f => {
+                        const isApproved = f.status === 'approved_by_admin';
+                        const isRejected = f.status === 'rejected';
+                        
+                        return (
+                            <div 
+                                key={f.id} 
+                                onClick={() => setSelected(f)}
+                                className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:scale-[1.01] transition-all cursor-pointer flex justify-between items-center group"
+                            >
+                                <div className="flex items-center gap-6">
+                                    <div className={cn(
+                                        "w-12 h-12 rounded-2xl flex items-center justify-center transition-colors",
+                                        isApproved ? "bg-emerald-50 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white" :
+                                        isRejected ? "bg-rose-50 text-rose-500 group-hover:bg-rose-500 group-hover:text-white" :
+                                        "bg-amber-50 text-amber-500 group-hover:bg-amber-500 group-hover:text-white"
+                                    )}>
+                                        <Clock className="w-6 h-6" />
+                                    </div>
+                                    <div className="grid grid-cols-4 gap-8 items-center">
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Location</p>
+                                            <p className="font-black text-slate-900 uppercase">{f.auditLocation}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Date</p>
+                                            <p className="font-bold text-slate-600">{f.auditDate}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Payment</p>
+                                            <p className="font-black text-indigo-600 uppercase italic">{formatCurrency(f.payment, 'INR')}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Status</p>
+                                            <span className={cn(
+                                                "inline-block px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider",
+                                                isApproved ? "bg-emerald-100 text-emerald-800" :
+                                                isRejected ? "bg-rose-100 text-rose-800" :
+                                                "bg-amber-100 text-amber-800"
+                                            )}>
+                                                {isApproved ? "Approved" : isRejected ? "Rejected" : "Awaiting Admin"}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-3 gap-8">
-                                    <div>
-                                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Location</p>
-                                        <p className="font-black text-slate-900 uppercase">{f.auditLocation}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Date</p>
-                                        <p className="font-bold text-slate-600">{f.auditDate}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Payment</p>
-                                        <p className="font-black text-indigo-600 uppercase italic">{formatCurrency(f.payment, 'INR')}</p>
-                                    </div>
+                                <div className="flex items-center gap-2">
+                                    {!isApproved && (
+                                        <>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setEditing(f); }}
+                                                className="p-3 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl transition-all"
+                                            >
+                                                <Edit className="w-5 h-5" />
+                                            </button>
+                                            <button 
+                                                onClick={(e) => handleDelete(e, f.id)}
+                                                className="p-3 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-500 rounded-xl transition-all"
+                                            >
+                                                <Trash2 className="w-5 h-5" />
+                                            </button>
+                                        </>
+                                    )}
+                                    {isApproved && (
+                                        <div className="p-3 bg-slate-100 text-slate-400 rounded-xl cursor-not-allowed" title="Approved audits are locked and cannot be edited.">
+                                            <Lock className="w-5 h-5" />
+                                        </div>
+                                    )}
+                                    <ChevronRight className="w-5 h-5 text-slate-300 ml-4" />
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); setEditing(f); }}
-                                    className="p-3 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl transition-all"
-                                >
-                                    <Edit className="w-5 h-5" />
-                                </button>
-                                <button 
-                                    onClick={(e) => handleDelete(e, f.id)}
-                                    className="p-3 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-all"
-                                >
-                                    <Trash2 className="w-5 h-5" />
-                                </button>
-                                <ChevronRight className="w-5 h-5 text-slate-300 ml-4" />
-                            </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
 
