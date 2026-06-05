@@ -1,4 +1,4 @@
-const CACHE_NAME = 'secure-audit-cache-v2';
+const CACHE_NAME = 'secure-audit-cache-v3';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -39,13 +39,22 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Network-First strategy: Always check the network first for the latest assets.
+  // This avoids sticky caching of outdated index.html and JS chunks on site deployments.
   event.respondWith(
-    caches.match(event.request)
+    fetch(event.request)
       .then(response => {
-        if (response) {
-          return response;
+        if (response && response.status === 200) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseClone);
+          });
         }
-        return fetch(event.request);
+        return response;
+      })
+      .catch(() => {
+        // Fall back to cache if offline or network is unavailable
+        return caches.match(event.request);
       })
   );
 });

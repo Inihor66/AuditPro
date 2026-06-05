@@ -244,7 +244,7 @@ function loadDB() {
   }
 }
 
-function saveDB() {
+async function saveDB() {
   const tmpPath = path.join("/tmp", "db.json");
   const localPath = path.join(process.cwd(), "db.json");
   const payload = JSON.stringify(db, null, 2);
@@ -277,9 +277,12 @@ function saveDB() {
 
   // 100% Cloud Persistence with Google Firebase Firestore
   if (firebaseDb) {
-    saveDBToFirestore().catch(err => {
+    try {
+      await saveDBToFirestore();
+      console.log("[FIREBASE] Fully updated and flushed state into Firestore successfully.");
+    } catch (err) {
       console.error("[FIREBASE SAVE ACTION FAILED]:", err);
-    });
+    }
   }
 }
 
@@ -584,20 +587,21 @@ app.post("/api/forms", (req, res) => {
   res.json(form);
 });
 
-app.put("/api/forms/:id", (req, res) => {
+app.put("/api/forms/:id", async (req, res) => {
   const idx = db.forms.findIndex(f => f.id === req.params.id);
   if (idx === -1) return res.status(404).send("Not found");
   
-  // Guard for editing: Allow if status is pending/rejected OR if updating from approved_by_admin to ongoing by the student
+  // Guard for editing: Allow if status is pending/rejected, OR if updating from approved_by_admin to ongoing by the student, OR if toggling group chat
   const currentStatus = db.forms[idx].status;
   const isStudentApplying = (currentStatus === 'approved_by_admin' && req.body.status === 'ongoing');
+  const isGroupChatToggle = (req.body.groupChatEnabled !== undefined);
   
-  if (currentStatus !== 'pending' && currentStatus !== 'rejected' && !isStudentApplying) {
+  if (currentStatus !== 'pending' && currentStatus !== 'rejected' && !isStudentApplying && !isGroupChatToggle) {
     return res.status(403).json({ error: "FORBIDDEN", message: "Cannot edit form after approval." });
   }
 
   db.forms[idx] = { ...db.forms[idx], ...req.body };
-  saveDB();
+  await saveDB();
   res.json(db.forms[idx]);
 });
 
@@ -1033,7 +1037,7 @@ app.get("/api/admin/:appId/status", (req, res) => {
     });
 });
 
-app.post("/api/admin/forms/:id/process", (req, res) => {
+app.post("/api/admin/forms/:id/process", async (req, res) => {
     const { id } = req.params;
     const { adminPayment, adminTerms, hiddenFields, customFields } = req.body;
     
@@ -1060,7 +1064,7 @@ app.post("/api/admin/forms/:id/process", (req, res) => {
     form.customFields = customFields;
     form.status = 'approved_by_admin';
     
-    saveDB();
+    await saveDB();
     res.json(form);
 });
 
