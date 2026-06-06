@@ -13,7 +13,10 @@ import {
     Calendar,
     MessageSquare,
     FileText,
-    User as UserIcon
+    User as UserIcon,
+    Paperclip,
+    Download,
+    Trash2
 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -689,6 +692,33 @@ function StudentChats() {
     const [channels, setChannels] = useState<any[]>([]);
     const [activeChannel, setActiveChannel] = useState<any>(null); // { id: string, name: string, type: 'dm' | 'group' }
     const [loading, setLoading] = useState(true);
+    const [attachedFile, setAttachedFile] = useState<{ name: string, type: string, data: string } | null>(null);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const triggerDownload = (filename: string, filedata: string) => {
+        const link = document.createElement('a');
+        link.href = filedata;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            setAttachedFile({
+                name: file.name,
+                type: file.type,
+                data: reader.result as string
+            });
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
 
     // Load available channels (Direct DM with App Creator/Admin and Group Chats for claimed audits)
     useEffect(() => {
@@ -786,7 +816,7 @@ function StudentChats() {
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!inputText.trim() || !activeChannel || !user?.id) return;
+        if ((!inputText.trim() && !attachedFile) || !activeChannel || !user?.id) return;
         
         try {
             const res = await fetch('/api/chats', {
@@ -795,11 +825,15 @@ function StudentChats() {
                 body: JSON.stringify({
                     senderId: user.id,
                     receiverId: activeChannel.id,
-                    text: inputText
+                    text: inputText,
+                    fileName: attachedFile ? attachedFile.name : null,
+                    fileData: attachedFile ? attachedFile.data : null,
+                    fileType: attachedFile ? attachedFile.type : null
                 })
             });
             if (res.ok) {
                 setInputText("");
+                setAttachedFile(null);
                 const msg = await res.json();
                 setMessages(prev => [...prev, msg].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
             }
@@ -915,7 +949,25 @@ function StudentChats() {
                                                         {m.senderName || (m.senderId === admin?.id ? 'Admin/Controller' : 'Firm/Company')}
                                                     </p>
                                                 )}
-                                                <p>{m.text}</p>
+                                                {m.text && <p className="whitespace-pre-wrap">{m.text}</p>}
+                                                {m.fileName && (
+                                                    <div className={cn(
+                                                        "mt-2 p-3 rounded-xl flex items-center justify-between gap-3 text-xs font-black",
+                                                        isMe ? "bg-white/10 text-white" : "bg-slate-50 text-slate-800 border border-slate-100"
+                                                    )}>
+                                                        <div className="flex items-center gap-2 truncate">
+                                                            <FileText className="w-5 h-5 text-emerald-500 shrink-0" />
+                                                            <span className="truncate pr-2">{m.fileName}</span>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => triggerDownload(m.fileName, m.fileData)}
+                                                            className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-colors shadow-sm shrink-0"
+                                                            title="Download File"
+                                                        >
+                                                            <Download className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                )}
                                                 <p className={cn(
                                                     "text-[8px] mt-1.5 opacity-50 font-bold",
                                                     isMe ? "text-slate-300" : "text-slate-400"
@@ -929,8 +981,38 @@ function StudentChats() {
                             )}
                         </div>
 
+                        {attachedFile && (
+                            <div className="mx-6 p-4 bg-emerald-50/50 border border-emerald-200 rounded-2xl flex items-center justify-between shadow-inner">
+                                <div className="flex items-center gap-2 truncate">
+                                    <FileText className="w-5 h-5 text-emerald-600 shrink-0 animate-pulse" />
+                                    <span className="text-xs font-black text-slate-800 truncate">{attachedFile.name}</span>
+                                </div>
+                                <button 
+                                    onClick={() => setAttachedFile(null)}
+                                    className="p-1.5 rounded-full bg-emerald-100 hover:bg-rose-500 hover:text-white text-slate-700 transition-colors cursor-pointer"
+                                    title="Cancel Attach"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+
                         {/* Input Footer */}
-                        <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-slate-100 flex gap-4 shrink-0">
+                        <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-slate-100 flex gap-4 shrink-0 items-center">
+                            <input 
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                onChange={handleFileChange}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="w-12 h-12 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0 cursor-pointer"
+                                title="Attach File"
+                            >
+                                <Paperclip className="w-5 h-5" />
+                            </button>
                             <input 
                                 className="flex-1 bg-slate-50 p-4 rounded-2xl outline-none border-2 border-transparent focus:border-emerald-500 focus:bg-white transition-all font-bold text-sm text-slate-900"
                                 placeholder={`Type message to ${activeChannel.name}...`}
@@ -939,7 +1021,7 @@ function StudentChats() {
                             />
                             <button 
                                 type="submit"
-                                className="w-12 h-12 bg-emerald-600 text-white rounded-xl flex items-center justify-center hover:bg-emerald-500 transition-all active:scale-90 shadow-lg"
+                                className="w-12 h-12 bg-emerald-600 text-white rounded-xl flex items-center justify-center hover:bg-emerald-500 transition-all active:scale-90 shadow-lg shrink-0"
                             >
                                 <ArrowRight className="w-5 h-5" />
                             </button>

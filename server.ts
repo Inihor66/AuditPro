@@ -1009,12 +1009,15 @@ app.get("/api/admin/:appId/owner", async (req, res) => {
 });
 
 app.post("/api/chats", async (req, res) => {
-  const { senderId, receiverId, text } = req.body;
+  const { senderId, receiverId, text, fileName, fileData, fileType } = req.body;
   const newMsg = {
     id: Math.random().toString(36).substr(2, 9),
     senderId,
     receiverId,
     text,
+    fileName: fileName || null,
+    fileData: fileData || null,
+    fileType: fileType || null,
     timestamp: new Date().toISOString()
   };
   db.chats.push(newMsg);

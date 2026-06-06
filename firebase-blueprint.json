@@ -79,7 +79,10 @@
         "senderId": { "type": "string" },
         "receiverId": { "type": "string" },
         "message": { "type": "string" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileData": { "type": "string" },
+        "fileType": { "type": "string" }
       },
       "required": ["id", "senderId", "receiverId"]
     },

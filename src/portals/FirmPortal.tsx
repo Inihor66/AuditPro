@@ -23,7 +23,9 @@ import {
   Smartphone,
   Mail,
   MapPin,
-  Lock
+  Lock,
+  Paperclip,
+  Download
 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -959,6 +961,33 @@ function FirmChats() {
     const [messages, setMessages] = useState<any[]>([]);
     const [inputText, setInputText] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
+    const [attachedFile, setAttachedFile] = useState<{ name: string, type: string, data: string } | null>(null);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const triggerDownload = (filename: string, filedata: string) => {
+        const link = document.createElement('a');
+        link.href = filedata;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            setAttachedFile({
+                name: file.name,
+                type: file.type,
+                data: reader.result as string
+            });
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
 
     useEffect(() => {
         if (!user?.id) return;
@@ -1031,7 +1060,7 @@ function FirmChats() {
 
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!inputText.trim() || !selectedChat || !user?.id) return;
+        if ((!inputText.trim() && !attachedFile) || !selectedChat || !user?.id) return;
 
         const res = await fetch('/api/chats', {
             method: 'POST',
@@ -1039,12 +1068,16 @@ function FirmChats() {
             body: JSON.stringify({
                 senderId: user.id,
                 receiverId: selectedChat.id,
-                text: inputText
+                text: inputText,
+                fileName: attachedFile ? attachedFile.name : null,
+                fileData: attachedFile ? attachedFile.data : null,
+                fileType: attachedFile ? attachedFile.type : null
             })
         });
 
         if (res.ok) {
             setInputText('');
+            setAttachedFile(null);
             fetchMessages();
         }
     };
@@ -1108,31 +1141,82 @@ function FirmChats() {
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-8 space-y-6">
-                                {messages.map((m, idx) => (
-                                    <div key={idx} className={cn("flex", m.senderId === user?.id ? "justify-end" : "justify-start")}>
-                                        <div className={cn(
-                                            "max-w-[70%] p-5 rounded-[2rem]",
-                                            m.senderId === user?.id 
-                                                ? "bg-slate-900 text-white rounded-tr-none shadow-xl shadow-slate-200" 
-                                                : "bg-white text-slate-800 rounded-tl-none border border-slate-100 shadow-sm"
-                                        )}>
-                                            {selectedChat?.type === 'group' && m.senderId !== user?.id && (
-                                                <p className="text-[8px] font-black uppercase text-indigo-600 mb-1">
-                                                    {m.senderName || 'Participant'}
+                                {messages.map((m, idx) => {
+                                    const isMe = m.senderId === user?.id;
+                                    return (
+                                        <div key={idx} className={cn("flex", isMe ? "justify-end" : "justify-start")}>
+                                            <div className={cn(
+                                                "max-w-[70%] p-5 rounded-[2rem]",
+                                                isMe 
+                                                    ? "bg-slate-900 text-white rounded-tr-none shadow-xl shadow-slate-200" 
+                                                    : "bg-white text-slate-800 rounded-tl-none border border-slate-100 shadow-sm"
+                                            )}>
+                                                {selectedChat?.type === 'group' && m.senderId !== user?.id && (
+                                                    <p className="text-[8px] font-black uppercase text-indigo-600 mb-1">
+                                                        {m.senderName || 'Participant'}
+                                                    </p>
+                                                )}
+                                                {m.text && <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap">{m.text}</p>}
+                                                {m.fileName && (
+                                                    <div className={cn(
+                                                        "mt-2 p-3 rounded-xl flex items-center justify-between gap-3 text-xs font-black",
+                                                        isMe ? "bg-white/10 text-white" : "bg-slate-50 text-slate-800 border border-slate-100"
+                                                    )}>
+                                                        <div className="flex items-center gap-2 truncate">
+                                                            <FileText className="w-5 h-5 text-indigo-500 shrink-0" />
+                                                            <span className="truncate pr-2">{m.fileName}</span>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => triggerDownload(m.fileName, m.fileData)}
+                                                            className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer transition-colors shadow-sm shrink-0"
+                                                            title="Download File"
+                                                        >
+                                                            <Download className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                <p className={cn("text-[8px] font-black uppercase tracking-widest mt-2 opacity-40", isMe ? "text-white" : "text-slate-400")}>
+                                                    {new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                                 </p>
-                                            )}
-                                            <p className="text-sm font-medium leading-relaxed">{m.text}</p>
-                                            <p className={cn("text-[8px] font-black uppercase tracking-widest mt-2 opacity-40", m.senderId === user?.id ? "text-white" : "text-slate-400")}>
-                                                {new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                            </p>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                                 <div ref={scrollRef} />
                             </div>
 
-                            <div className="p-6 bg-white border-t border-slate-100">
-                                <form onSubmit={handleSend} className="relative">
+                            {attachedFile && (
+                                <div className="mx-6 p-4 bg-indigo-50/50 border border-indigo-200 rounded-2xl flex items-center justify-between shadow-inner">
+                                    <div className="flex items-center gap-2 truncate">
+                                        <FileText className="w-5 h-5 text-indigo-600 shrink-0 animate-pulse" />
+                                        <span className="text-xs font-black text-slate-800 truncate">{attachedFile.name}</span>
+                                    </div>
+                                    <button 
+                                        onClick={() => setAttachedFile(null)}
+                                        className="p-1.5 rounded-full bg-indigo-100 hover:bg-rose-500 hover:text-white text-slate-700 transition-colors cursor-pointer"
+                                        title="Cancel Attach"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )}
+
+                            <div className="p-6 bg-white border-t border-slate-100 flex gap-4 items-center">
+                                <input 
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    onChange={handleFileChange}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="w-12 h-12 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0 cursor-pointer"
+                                    title="Attach File"
+                                >
+                                    <Paperclip className="w-5 h-5" />
+                                </button>
+                                <form onSubmit={handleSend} className="relative flex-1">
                                     <input
                                         type="text"
                                         value={inputText}
