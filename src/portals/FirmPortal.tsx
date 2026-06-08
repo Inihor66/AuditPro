@@ -635,6 +635,7 @@ function CreateAuditModal({ onClose, onCreated }: { onClose: () => void, onCreat
         auditLocation: '',
         payment: 0,
         auditDate: '',
+        duration: '',
         creditPeriod: 30,
         terms: ''
     });
@@ -680,13 +681,18 @@ function CreateAuditModal({ onClose, onCreated }: { onClose: () => void, onCreat
 
                     <div className="grid grid-cols-2 gap-8">
                         <div className="space-y-2">
+                            <label className="text-[10px] text-slate-400 uppercase font-black tracking-widest pl-2">Duration of Assignment</label>
+                            <input type="text" placeholder="e.g. 3 Months, 2 Weeks" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-600" required />
+                        </div>
+                        <div className="space-y-2">
                             <label className="text-[10px] text-slate-400 uppercase font-black tracking-widest pl-2">Phone Link</label>
                             <input type="text" value={formData.firmPhone} onChange={e => setFormData({...formData, firmPhone: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-600" required />
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] text-slate-400 uppercase font-black tracking-widest pl-2">Audit Site</label>
-                            <input type="text" value={formData.auditLocation} onChange={e => setFormData({...formData, auditLocation: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black uppercase outline-none focus:ring-2 focus:ring-indigo-600" required />
-                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-[10px] text-slate-400 uppercase font-black tracking-widest pl-2">Audit Site / Location</label>
+                        <input type="text" value={formData.auditLocation} onChange={e => setFormData({...formData, auditLocation: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black uppercase outline-none focus:ring-2 focus:ring-indigo-600" required />
                     </div>
 
                     <div className="grid grid-cols-3 gap-8">
@@ -749,13 +755,18 @@ function EditAuditModal({ audit, onClose, onUpdated }: { audit: AuditForm, onClo
                 <form className="p-10 space-y-8" onSubmit={handleSubmit}>
                     <div className="grid grid-cols-2 gap-8">
                         <div className="space-y-2">
-                            <label className="text-[10px] text-slate-400 uppercase font-black tracking-widest pl-2">Audit Site</label>
-                            <input type="text" value={formData.auditLocation} onChange={e => setFormData({...formData, auditLocation: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black uppercase outline-none focus:ring-2 focus:ring-indigo-600" required />
+                            <label className="text-[10px] text-slate-400 uppercase font-black tracking-widest pl-2">Duration of Assignment</label>
+                            <input type="text" placeholder="e.g. 3 Months, 2 Weeks" value={formData.duration || ''} onChange={e => setFormData({...formData, duration: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-600" required />
                         </div>
                         <div className="space-y-2">
                             <label className="text-[10px] text-slate-400 uppercase font-black tracking-widest pl-2">Audit Date</label>
                             <input type="date" value={formData.auditDate} onChange={e => setFormData({...formData, auditDate: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold" required />
                         </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-[10px] text-slate-400 uppercase font-black tracking-widest pl-2">Audit Site / Location</label>
+                        <input type="text" value={formData.auditLocation} onChange={e => setFormData({...formData, auditLocation: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black uppercase outline-none focus:ring-2 focus:ring-indigo-600" required />
                     </div>
 
                     <div className="grid grid-cols-2 gap-8">
@@ -847,6 +858,12 @@ function AuditDetailModal({ audit, onClose }: { audit: AuditForm, onClose: () =>
                                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Settlement (Credit Period)</p>
                                 <p className="text-sm font-bold text-slate-800">{audit.creditPeriod} Days</p>
                             </div>
+                            {audit.duration && (
+                                <div>
+                                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Duration of Assignment</p>
+                                    <p className="text-sm font-bold text-slate-800">{audit.duration}</p>
+                                </div>
+                            )}
                         </div>
 
                         {audit.terms && (

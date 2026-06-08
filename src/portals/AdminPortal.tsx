@@ -364,6 +364,7 @@ function FirmRequests() {
                                                 { label: 'Firm Name', key: 'firmName', val: editing.firmName },
                                                 { label: 'Email', key: 'firmEmail', val: editing.firmEmail },
                                                 { label: 'Phone', key: 'firmPhone', val: editing.firmPhone },
+                                                { label: 'Assignment Duration', key: 'duration', val: editing.duration || 'Not specified' },
                                                 { label: 'Payment Offered', key: 'payment', val: formatCurrency(editing.payment, 'INR') },
                                                 { label: 'Date', key: 'auditDate', val: editing.auditDate },
                                                 { label: 'Terms', key: 'terms', val: editing.terms }
@@ -556,6 +557,12 @@ function AdminPending() {
                                     <span>Schedule</span>
                                     <span className="text-slate-900">{f.auditDate}</span>
                                 </div>
+                                {f.duration && (
+                                    <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                        <span>Duration</span>
+                                        <span className="text-indigo-600">{f.duration}</span>
+                                    </div>
+                                )}
                              </div>
                              <div className="flex gap-3">
                                 <button 
@@ -1146,6 +1153,9 @@ function AuditDetailModal({ audit, onClose }: { audit: AuditForm | null, onClose
                                 <div><p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mb-1">Company Name</p><p className="font-bold text-slate-900 text-lg">{audit.firmName}</p></div>
                                 <div><p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mb-1">Contact Point</p><p className="font-bold text-slate-800">{audit.firmEmail}</p><p className="text-xs text-slate-400 mt-0.5">{audit.firmPhone}</p></div>
                                 <div><p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mb-1">Budget Offered</p><p className="font-black text-slate-900 text-2xl">{formatCurrency(audit.payment, 'INR')}</p></div>
+                                {audit.duration && (
+                                    <div><p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mb-1">Duration of Assignment</p><p className="font-bold text-slate-900 text-lg">{audit.duration}</p></div>
+                                )}
                                 <div><p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mb-1">Original Terms</p><p className="text-sm text-slate-500 italic leading-relaxed">"{audit.terms}"</p></div>
                             </div>
                         </div>

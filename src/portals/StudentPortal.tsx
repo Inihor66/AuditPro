@@ -16,7 +16,8 @@ import {
     User as UserIcon,
     Paperclip,
     Download,
-    Trash2
+    Trash2,
+    Clock
 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -156,7 +157,8 @@ function StudentDashboard() {
 
     const filteredAudits = availableAudits.filter(f => {
         const matchesSearch = f.auditLocation.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                             f.firmName.toLowerCase().includes(searchQuery.toLowerCase());
+                              f.firmName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                              (f.duration && f.duration.toLowerCase().includes(searchQuery.toLowerCase()));
         
         if (matchMyLocation && user?.location) {
             return matchesSearch && f.auditLocation.toLowerCase().includes(user.location.toLowerCase());
@@ -215,7 +217,7 @@ function StudentDashboard() {
                 <div className="flex flex-wrap gap-3 w-full md:w-auto">
                     <div className="relative flex-1 md:w-64">
                          <input 
-                            placeholder="Search by location..."
+                            placeholder="Search by location or duration..."
                             className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
@@ -262,6 +264,12 @@ function StudentDashboard() {
                                     <Calendar className="w-4 h-4 text-slate-400" />
                                     <span>Target Date: <span className="font-bold text-slate-900">{f.auditDate}</span></span>
                                 </div>
+                                {f.duration && (
+                                    <div className="flex items-center gap-3 text-sm text-slate-600">
+                                        <Clock className="w-4 h-4 text-indigo-500" />
+                                        <span>Duration: <span className="font-bold text-indigo-600">{f.duration}</span></span>
+                                    </div>
+                                )}
                                 <div className="flex items-center gap-3 text-sm text-slate-600">
                                     <DollarSign className="w-4 h-4 text-slate-400" />
                                     <span>Base Allocation: <span className="font-bold text-emerald-600">{formatCurrency(f.adminPayment || 0, 'INR')}</span></span>
@@ -353,6 +361,12 @@ function StudentDashboard() {
                                                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Execution Scheduled Date</p>
                                                 <p className="text-sm font-bold text-slate-800">{selected.auditDate}</p>
                                             </div>
+                                            {!isHidden('duration') && selected.duration && (
+                                                <div>
+                                                    <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Duration of Assignment</p>
+                                                    <p className="text-sm font-bold text-slate-800">{selected.duration}</p>
+                                                </div>
+                                            )}
                                             {!isHidden('creditPeriod') && (
                                                 <div>
                                                     <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Settlement Window</p>
@@ -617,6 +631,12 @@ function StudentHistory() {
                                             <p className="text-[9px] text-slate-400 uppercase font-black">Scheduled Date</p>
                                             <p className="font-bold text-slate-900 mt-0.5">{selectedHistoryForm.auditDate}</p>
                                         </div>
+                                        {!isHidden('duration') && selectedHistoryForm.duration && (
+                                            <div>
+                                                <p className="text-[9px] text-slate-400 uppercase font-black">Duration of Assignment</p>
+                                                <p className="font-bold text-slate-900 mt-0.5">{selectedHistoryForm.duration}</p>
+                                            </div>
+                                        )}
                                         {!isHidden('creditPeriod') && (
                                             <div>
                                                 <p className="text-[9px] text-slate-400 uppercase font-black">Credit Period</p>

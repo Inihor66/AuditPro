@@ -42,6 +42,7 @@ export interface AuditForm {
   auditLocation: string;
   payment: number;
   auditDate: string;
+  duration?: string;
   creditPeriod: number;
   terms: string;
   status: 'pending' | 'approved_by_admin' | 'ongoing' | 'completed' | 'deleted';
