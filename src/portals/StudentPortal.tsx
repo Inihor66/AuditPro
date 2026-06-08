@@ -262,7 +262,7 @@ function StudentDashboard() {
                             <div className="space-y-4 mb-8">
                                 <div className="flex items-center gap-3 text-sm text-slate-600">
                                     <Calendar className="w-4 h-4 text-slate-400" />
-                                    <span>Target Date: <span className="font-bold text-slate-900">{f.auditDate}</span></span>
+                                    <span>Target Date: <span className="font-bold text-slate-900">{f.auditDate || 'Flexible'}</span></span>
                                 </div>
                                 {f.duration && (
                                     <div className="flex items-center gap-3 text-sm text-slate-600">
@@ -359,7 +359,7 @@ function StudentDashboard() {
                                             </div>
                                             <div>
                                                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Execution Scheduled Date</p>
-                                                <p className="text-sm font-bold text-slate-800">{selected.auditDate}</p>
+                                                <p className="text-sm font-bold text-slate-800">{selected.auditDate || 'Flexible'}</p>
                                             </div>
                                             {!isHidden('duration') && selected.duration && (
                                                 <div>
@@ -556,7 +556,7 @@ function StudentHistory() {
                             <div className="flex flex-wrap items-center justify-between md:justify-end gap-10 w-full md:w-auto border-t md:border-t-0 pt-4 md:pt-0 border-slate-100">
                                 <div className="text-left md:text-right">
                                     <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Scheduled</p>
-                                    <p className="font-bold text-slate-900">{f.auditDate}</p>
+                                    <p className="font-bold text-slate-900">{f.auditDate || 'Flexible'}</p>
                                 </div>
                                 <div className="text-left md:text-right">
                                     <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Payout Allocation</p>
@@ -629,7 +629,7 @@ function StudentHistory() {
                                         </div>
                                         <div>
                                             <p className="text-[9px] text-slate-400 uppercase font-black">Scheduled Date</p>
-                                            <p className="font-bold text-slate-900 mt-0.5">{selectedHistoryForm.auditDate}</p>
+                                            <p className="font-bold text-slate-900 mt-0.5">{selectedHistoryForm.auditDate || 'Flexible'}</p>
                                         </div>
                                         {!isHidden('duration') && selectedHistoryForm.duration && (
                                             <div>
